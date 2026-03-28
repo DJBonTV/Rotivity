@@ -1,6 +1,6 @@
 <h1>
-  Rotivity
   <img src="https://github.com/DJBonTV/Rotivity/blob/main/Assets/Rotivity.png" height="25">
+  Rotivity
 </h1>
 
 Welcome to Rotivity, an application to share your Roblox gameplay directly to Discord.
