@@ -18,8 +18,15 @@ Using Rotivity is simple, once Rotivity is installed it will be added to the sys
 Once Rotivity is started, the Roblox game client will need to be restarted in order to access the Roblox log files.
 
 ## Does Rotivity put my account in danger?
-Unlike other Discord Rich Presence extentions, Rotivity has no access to your cookies or account. It only accesses the Roblox log files which store the ID of the game you join and the account you use. This is already public information and does not endanger your account.
+Unlike other Discord Rich Presence extentions, Rotivity has no access to your cookies or account. It only accesses the Roblox log files which store the ID of the game you join and user ID of the account you use. This is already public information and does not endanger your account.
 
-Rotivity is also based on the same methods [Bloxstrap](https://github.com/bloxstraplabs/bloxstrap) uses to interact with the Roblox client. This will not get your account banned unless you are using other cheats.
+Currently, Rotivity will share any game you join regarless of your Roblox privacy setting, I intend to change this in the near future. In the mean time, you can disable presence sharing from the system tray.
+
+Rotivity is based on the same methods [Bloxstrap](https://github.com/bloxstraplabs/bloxstrap) uses to interact with the Roblox client. This will not get your account banned unless you are using other cheats.
+
+## How does Rotivity work?
+Rotivity communicates to a discord app which allows your user presence to be updated like you're playing a game. This is shown alongside "Roblox" while you are in a game.
+
+When Rotivity is active you will see the game name and icon on your profile, if you are in a Voice Channel, the Roblox icon will turn blue and display the game name and icon when clicked.
 
 ## Thanks for checking out Rotivity!
