@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
@@ -163,6 +163,7 @@ namespace Rotivity
         private string? _currentLogFile;
         private bool _readingLog;
         private bool _disposed;
+        private bool wasrunningcheck = false;
 
         private const string GameJoiningEntry = "[FLog::Output] ! Joining game";
         private const string GameJoinedEntry = "[FLog::Network] serverId:";
@@ -195,12 +196,16 @@ namespace Rotivity
             // One-time check at startup: if RobloxPlayerBeta is already running, attach to the latest log
             try
             {
-                var procs = Process.GetProcessesByName("RobloxPlayerBeta");
-                if (procs.Length > 0)
+                if (!wasrunningcheck)
                 {
-                    GameOpen = true;
-                    Console.WriteLine("Attaching to last log");
-                    TryAttachToLatestLog();
+                    wasrunningcheck = true;
+                    var procs = Process.GetProcessesByName("RobloxPlayerBeta");
+                    if (procs.Length > 0)
+                    {
+                        GameOpen = true;
+                        Console.WriteLine("Attaching to last log");
+                        TryAttachToLatestLog();
+                    }
                 }
             }
             catch { }
@@ -227,6 +232,28 @@ namespace Rotivity
                     var tb = File.GetLastWriteTimeUtc(b);
                     return tb.CompareTo(ta);
                 });
+
+                // select only the single file that was last written to
+                string latestFile = null;
+                DateTime latestWriteUtc = DateTime.MinValue;
+                foreach (var f in files)
+                {
+                    var t = File.GetLastWriteTimeUtc(f);
+                    if (t > latestWriteUtc)
+                    {
+                        latestWriteUtc = t;
+                        latestFile = f;
+                    }
+                }
+
+                if (latestFile != null)
+                {
+                    files = new[] { latestFile };
+                }
+                else
+                {
+                    files = Array.Empty<string>();
+                }
 
                 string? candidate = null;
 
