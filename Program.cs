@@ -7,6 +7,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Reflection;
 using System.Threading;
+using System.Diagnostics;
 using System.Windows.Forms;
 using System.Drawing;
 using Microsoft.Win32;
@@ -121,6 +122,21 @@ namespace Rotivity
                 var json = await _http.GetStringAsync(
                     $"https://users.roblox.com/v1/users/{userid}");
                 using var doc = JsonDocument.Parse(json);
+                return doc.RootElement.GetProperty("name").GetString();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        public static async Task<string?> GetDisplayName(int userid)
+        {
+            try
+            {
+                var json = await _http.GetStringAsync(
+                    $"https://users.roblox.com/v1/users/{userid}");
+                using var doc = JsonDocument.Parse(json);
                 return doc.RootElement.GetProperty("displayName").GetString();
             }
             catch
@@ -175,6 +191,73 @@ namespace Rotivity
             _fsWatcher.Changed += OnLogEvent;
 
             Console.WriteLine("Waiting for Roblox log files...");
+
+            // One-time check at startup: if RobloxPlayerBeta is already running, attach to the latest log
+            try
+            {
+                var procs = Process.GetProcessesByName("RobloxPlayerBeta");
+                if (procs.Length > 0)
+                {
+                    GameOpen = true;
+                    Console.WriteLine("Attaching to last log");
+                    TryAttachToLatestLog();
+                }
+            }
+            catch { }
+        }
+
+        private void TryAttachToLatestLog()
+        {
+            try
+            {
+                string logDir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "Roblox\\logs");
+
+                if (!Directory.Exists(logDir))
+                    return;
+
+                // Find log files sorted by last write (newest first)
+                var files = Directory.GetFiles(logDir, "*.log");
+                if (files.Length == 0) return;
+
+                Array.Sort(files, (a, b) =>
+                {
+                    var ta = File.GetLastWriteTimeUtc(a);
+                    var tb = File.GetLastWriteTimeUtc(b);
+                    return tb.CompareTo(ta);
+                });
+
+                string? candidate = null;
+
+                // Look for the most recent file that contains a game join entry
+                foreach (var f in files)
+                {
+                    try
+                    {
+                        using var stream = new FileStream(f, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                        using var reader = new StreamReader(stream);
+                        string? line;
+                        while ((line = reader.ReadLine()) != null)
+                        {
+                            if (line.Contains(GameJoinedEntry) || line.Contains(GameJoiningEntry) || line.Contains(UserIdEntry))
+                            {
+                                ProcessLine(line);
+                                candidate = f;
+                                Thread.Sleep(500);
+                            }
+                        }
+                        if (candidate != null) break;
+                    }
+                    catch { }
+                }
+
+                // If none found, fall back to the newest file
+                if (candidate == null) candidate = files[0];
+
+                AttachToLog(candidate);
+            }
+            catch { }
         }
 
         private void OnLogEvent(object sender, FileSystemEventArgs e)
@@ -312,7 +395,7 @@ namespace Rotivity
             _watcher.OnGameJoin += async (_, _) => await SetPresenceAsync();
             _watcher.OnGameLeave += (_, _) => _client.ClearPresence();
             Program.OnEnablePresenceChanged += async (_, _) => await SetPresenceAsync();
-            Program.OnMinimalPresenceChanged += async (_, _) => await SetPresenceAsync();
+            Program.OnShowUserChanged += async (_, _) => await SetPresenceAsync();
             Program.OnGameLinkShownChanged += async (_, _) => await SetPresenceAsync();
         }
 
@@ -361,36 +444,17 @@ namespace Rotivity
 
             var universeId = await RobloxApi.GetUniverseId(_watcher.Data.PlaceId);
             var gameName = await RobloxApi.GetGameName(universeId) ?? "Unknown";
-            var genre = await RobloxApi.GetGenre(universeId);
             var image = await GetGameThumbnail(universeId);
             var userImage = await GetUserThumbnail(_watcher.Data.UserId);
             var userName = await RobloxApi.GetUserName(_watcher.Data.UserId) ?? "Unknown";
-            var status = "In Experience";
+            var displayName = await RobloxApi.GetDisplayName(_watcher.Data.UserId) ?? "Unknown";
 
-            //may implement later, maybe alongside a UI for status customization
-            //decide state based on genre
-            if (!Program.MinimalPresence)
-            {
-                if (genre == "Roleplay & Avatar Sim")
-                {
-                    status = "Roleplaying";
-                }
-                else if (genre == "Shooter")
-                {
-                    status = "Fighting";
-                }
-                else if (genre == "Simulation")
-                {
-                    status = "Simulating";
-                }
-            }
-
-            if (Program.EnablePresence && !Program.MinimalPresence && !Program.GameLinkShown)
+            if (Program.EnablePresence && Program.ShowUser && !Program.GameLinkShown)
             {
                 _client.SetPresence(new RichPresence
                 {
                     Details = $"Playing {gameName}",
-                    State = status,
+                    State = $"In Game as {displayName}",
                     Timestamps = new Timestamps
                     {
                         Start = _watcher.Data.TimeJoined.ToUniversalTime()
@@ -400,16 +464,16 @@ namespace Rotivity
                         LargeImageKey = image,
                         LargeImageText = gameName,
                         SmallImageKey = userImage,
-                        SmallImageText = userName
+                        SmallImageText = $"@{userName}"
                     }
                 });
             }
-            else if (Program.EnablePresence && Program.MinimalPresence && !Program.GameLinkShown)
+            else if (Program.EnablePresence && !Program.ShowUser && !Program.GameLinkShown)
             {
                 _client.SetPresence(new RichPresence
                 {
                     Details = $"Playing {gameName}",
-                    State = status,
+                    State = "In Game",
                     Timestamps = new Timestamps
                     {
                         Start = _watcher.Data.TimeJoined.ToUniversalTime()
@@ -423,12 +487,12 @@ namespace Rotivity
                     }
                 });
             }
-            else if (Program.EnablePresence && !Program.MinimalPresence && Program.GameLinkShown)
+            else if (Program.EnablePresence && Program.ShowUser && Program.GameLinkShown)
             {
                 _client.SetPresence(new RichPresence
                 {
                     Details = $"Playing {gameName}",
-                    State = status,
+                    State = $"In Game as {displayName}",
                     Timestamps = new Timestamps
                     {
                         Start = _watcher.Data.TimeJoined.ToUniversalTime()
@@ -438,7 +502,7 @@ namespace Rotivity
                         LargeImageKey = image,
                         LargeImageText = gameName,
                         SmallImageKey = userImage,
-                        SmallImageText = userName
+                        SmallImageText = $"@{userName}"
                     },
                     Buttons = new DiscordButton[]
                     {
@@ -450,12 +514,12 @@ namespace Rotivity
                     }
                 });
             }
-            else if (Program.EnablePresence && Program.MinimalPresence && Program.GameLinkShown)
+            else if (Program.EnablePresence && !Program.ShowUser && Program.GameLinkShown)
             {
                 _client.SetPresence(new RichPresence
                 {
                     Details = $"Playing {gameName}",
-                    State = status,
+                    State = "In Game",
                     Timestamps = new Timestamps
                     {
                         Start = _watcher.Data.TimeJoined.ToUniversalTime()
@@ -491,8 +555,8 @@ namespace Rotivity
         // Controls whether Rich Presence is sent. Toggled from the tray menu.
         public static bool EnablePresence { get; set; } = true;
         public static event EventHandler? OnEnablePresenceChanged;
-        public static bool MinimalPresence { get; set; } = true;
-        public static event EventHandler? OnMinimalPresenceChanged;
+        public static bool ShowUser { get; set; } = false;
+        public static event EventHandler? OnShowUserChanged;
         public static bool GameLinkShown { get; set; } = false;
         public static event EventHandler? OnGameLinkShownChanged;
 
@@ -503,9 +567,9 @@ namespace Rotivity
             OnEnablePresenceChanged?.Invoke(null, EventArgs.Empty);
         }
 
-        public static void NotifyMinimalPresenceChanged()
+        public static void NotifyShowUserChanged()
         {
-            OnMinimalPresenceChanged?.Invoke(null, EventArgs.Empty);
+            OnShowUserChanged?.Invoke(null, EventArgs.Empty);
         }
 
         public static void NotifyGameLinkShownChanged()
@@ -600,7 +664,7 @@ namespace Rotivity
                     catch { }
                 };
 
-                var minimalpresenceItem = new ToolStripMenuItem("Minimal Presence")
+                var ShowUserItem = new ToolStripMenuItem("Show Username")
                 {
                     Font = new Font("Segoe UI", 9F, FontStyle.Regular),
                     ForeColor = Color.FromArgb(32, 32, 32),
@@ -608,16 +672,16 @@ namespace Rotivity
                 };
 
                 // initialize checked state from Program setting
-                try { minimalpresenceItem.Checked = Program.MinimalPresence; } catch { minimalpresenceItem.Checked = false; }
+                try { ShowUserItem.Checked = Program.ShowUser; } catch { ShowUserItem.Checked = false; }
 
                 // Toggle program presence flag
-                minimalpresenceItem.CheckedChanged += (s, e) =>
+                ShowUserItem.CheckedChanged += (s, e) =>
                 {
-                    try { Program.MinimalPresence = minimalpresenceItem.Checked; } catch { }
-                    try { Program.NotifyMinimalPresenceChanged(); } catch { }
+                    try { Program.ShowUser = ShowUserItem.Checked; } catch { }
+                    try { Program.NotifyShowUserChanged(); } catch { }
                 };
 
-                /*var gamelinkItem = new ToolStripMenuItem("Show Game Link")
+                var gamelinkItem = new ToolStripMenuItem("Show Game Link")
                 {
                     Font = new Font("Segoe UI", 9F, FontStyle.Regular),
                     ForeColor = Color.FromArgb(32, 32, 32),
@@ -632,7 +696,7 @@ namespace Rotivity
                 {
                     try { Program.GameLinkShown = gamelinkItem.Checked; } catch { }
                     try { Program.NotifyGameLinkShownChanged(); } catch { }
-                };*/
+                };
 
                 var enablepresenceItem = new ToolStripMenuItem("Enable Presence")
                 {
@@ -678,8 +742,8 @@ namespace Rotivity
 
                 cms.Items.Add(enablepresenceItem);
                 cms.Items.Add(separatortop);
-                //cms.Items.Add(gamelinkItem);
-                cms.Items.Add(minimalpresenceItem);
+                cms.Items.Add(gamelinkItem);
+                cms.Items.Add(ShowUserItem);
                 cms.Items.Add(startupItem);
                 cms.Items.Add(separatorbottom);
                 cms.Items.Add(restartItem);
