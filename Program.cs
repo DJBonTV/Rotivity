@@ -1,17 +1,18 @@
+using DiscordRPC;
+using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Drawing;
 using System.IO;
 using System.Net.Http;
+using System.Reflection;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using System.Reflection;
 using System.Threading;
-using System.Diagnostics;
+using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Drawing;
-using Microsoft.Win32;
-using DiscordRPC;
+using static System.Windows.Forms.LinkLabel;
 using DiscordButton = DiscordRPC.Button;
 
 namespace Rotivity
@@ -168,7 +169,7 @@ namespace Rotivity
         private const string GameJoiningEntry = "[FLog::Output] ! Joining game";
         private const string GameJoinedEntry = "[FLog::Network] serverId:";
         private const string GameLeavingEntry = "[FLog::Network] Time to disconnect replication data:";
-        private const string GameClosedEntry = "[DFLog::NetworkClient] Client:Disconnect"; //"[FLog::SingleSurfaceApp] destroyLuaApp:"; //"[FLog::ClientMemStatus] 2367380423";
+        private const string GameClosedEntry = "[FLog::SingleSurfaceApp] destroyLuaApp:"; //"[FLog::ClientMemStatus] 2367380423";
         private const string UserIdEntry = "[FLog::GameJoinLoadTime] Report game_join_loadtime:";
 
         public void Start()
@@ -258,6 +259,7 @@ namespace Rotivity
                 string? candidate = null;
 
                 // Look for the most recent file that contains a game join entry
+                string readline = "";
                 foreach (var f in files)
                 {
                     try
@@ -267,17 +269,19 @@ namespace Rotivity
                         string? line;
                         while ((line = reader.ReadLine()) != null)
                         {
-                            if (line.Contains(GameJoinedEntry) || line.Contains(GameJoiningEntry) || line.Contains(UserIdEntry) || line.Contains(GameLeavingEntry))
+                            if (line.Contains(GameJoinedEntry) || line.Contains(GameJoiningEntry) || line.Contains(UserIdEntry) || line.Contains(GameLeavingEntry) || line.Contains(GameClosedEntry))
                             {
-                                ProcessLine(line);
+                                readline = line;
                                 candidate = f;
-                                Thread.Sleep(500);
+                                Thread.Sleep(250);
                             }
                         }
                         if (candidate != null) break;
                     }
                     catch { }
                 }
+
+                ProcessLine(readline);
 
                 // If none found, fall back to the newest file
                 if (candidate == null) candidate = files[0];
