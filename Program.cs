@@ -432,9 +432,13 @@ namespace Rotivity
                 return cached;
 
             var json = await _http.GetStringAsync(
-                $"https://thumbnails.roblox.com/v1/games/icons?universeIds={universeId}&size=128x128&format=Png");
+                $"https://thumbnails.roblox.com/v1/games/icons?universeIds={universeId}&size=512x512&format=Png");
 
             using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.GetProperty("data").GetArrayLength() == 0)
+            {
+                return "DefaultGame";
+            }
             var url = doc.RootElement.GetProperty("data")[0]
                 .GetProperty("imageUrl").GetString()!;
 
