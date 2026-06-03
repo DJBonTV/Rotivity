@@ -267,7 +267,7 @@ namespace Rotivity
                         string? line;
                         while ((line = reader.ReadLine()) != null)
                         {
-                            if (line.Contains(GameJoinedEntry) || line.Contains(GameJoiningEntry) || line.Contains(UserIdEntry))
+                            if (line.Contains(GameJoinedEntry) || line.Contains(GameJoiningEntry) || line.Contains(UserIdEntry) || line.Contains(GameLeavingEntry))
                             {
                                 ProcessLine(line);
                                 candidate = f;
@@ -455,6 +455,10 @@ namespace Rotivity
                 $"https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds={userId}&size=75x75&format=Png&isCircular=false");
 
             using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.GetProperty("data").GetArrayLength() == 0)
+            {
+                return "DefaultGame";
+            }
             var url = doc.RootElement.GetProperty("data")[0]
                 .GetProperty("imageUrl").GetString()!;
 
