@@ -168,7 +168,7 @@ namespace Rotivity
         private const string GameJoiningEntry = "[FLog::Output] ! Joining game";
         private const string GameJoinedEntry = "[FLog::Network] serverId:";
         private const string GameLeavingEntry = "[FLog::Network] Time to disconnect replication data:";
-        private const string GameClosedEntry = "[FLog::SingleSurfaceApp] destroyLuaApp:"; //"[FLog::ClientMemStatus] 2367380423";
+        private const string GameClosedEntry = "[DFLog::NetworkClient] Client:Disconnect"; //"[FLog::SingleSurfaceApp] destroyLuaApp:"; //"[FLog::ClientMemStatus] 2367380423";
         private const string UserIdEntry = "[FLog::GameJoinLoadTime] Report game_join_loadtime:";
 
         public void Start()
